@@ -128,8 +128,24 @@ T[top]   = neumann(0.);
 scalar * tracers = {T};
 
 // ======================== 工具函数 ========================
+static inline double clamp01 (double v) {
+  return clamp(v, 0., 1.);
+}
+
 static inline double T_to_K (double Tnd) {
   return T_ref + Tnd*(T_wallK - T_ref);
+}
+
+static inline double alpha_blend_nd (double ff) {
+  return ff*alphaL_nd + (1. - ff)*alphaG_nd;
+}
+
+static inline double mu_to_nd (double mu_dim) {
+  return mu_dim/(rhoL0_dim*v_init*dRadius);
+}
+
+static inline double sigma_to_nd (double sigma_dim) {
+  return sigma_dim/(rhoL0_dim*sq(v_init)*dRadius);
 }
 
 int main(int argc, char * argv[]) {
@@ -189,7 +205,7 @@ int main(int argc, char * argv[]) {
   mu2 = mu_ratio*mu1;
 
   // 表面张力初值（后面会在 event 中按液滴平均温度更新）
-  f.sigma = sigma0_dim/(rhoL0_dim*sq(v_init)*dRadius);
+  f.sigma = sigma_to_nd(sigma0_dim);
 
   a = av;
 
@@ -255,8 +271,8 @@ event init (t = 0.0) {
 // ======================== 事件：更新热扩散率场 ========================
 event set_thermal_diffusivity (i++) {
   foreach() {
-    double ff = clamp(f[], 0., 1.);
-    alphaC[] = ff*alphaL_nd + (1. - ff)*alphaG_nd;
+    double ff = clamp01(f[]);
+    alphaC[] = alpha_blend_nd(ff);
   }
   boundary ({alphaC});
 
@@ -305,7 +321,7 @@ event update_variable_properties (i++) {
 
   // 组装面黏度给 NS 求解器
   foreach_face() {
-    double ff = clamp((f[] + f[-1,0])/2., 0., 1.);
+    double ff = clamp01((f[] + f[-1,0])/2.);
 
     double muL_f = (muL_loc[] + muL_loc[-1,0])/2.;
     double muG_f = (muG_loc[] + muG_loc[-1,0])/2.;
@@ -314,7 +330,7 @@ event update_variable_properties (i++) {
     double mu_dim = 1.0/(ff/max(muL_f,1e-30) + (1.0 - ff)/max(muG_f,1e-30));
 
     // 无量纲化：mu* = mu/(rhoL0 U R)
-    muv.x[] = mu_dim/(rhoL0_dim*v_init*dRadius);
+    muv.x[] = mu_to_nd(mu_dim);
   }
   boundary ((scalar *){muv});
 
@@ -337,7 +353,7 @@ event update_effective_sigma (i++) {
   sig_eff = max(sig_eff, sigMin_dim);
 
   // 无量纲 sigma
-  f.sigma = sig_eff/(rhoL0_dim*sq(v_init)*dRadius);
+  f.sigma = sigma_to_nd(sig_eff);
 }
 
 // ======================== 事件：自适应网格 ========================
@@ -395,8 +411,9 @@ event droplets (t += 0.01) {
 #endif
 
   for (int j = 0; j < n; j++)
-    fprintf (fp_droplets, "%d %g %d %g %g %g\n", i, t,
-             j, v[j], b[j].x/v[j], b[j].y/v[j]);
+    if (v[j] > 0.)
+      fprintf (fp_droplets, "%d %g %d %g %g %g\n", i, t,
+               j, v[j], b[j].x/v[j], b[j].y/v[j]);
   fflush (fp_droplets);
 }
 
@@ -414,8 +431,8 @@ event thermal_stats (t += 0.01; t <= tEnd) {
   double qwall_int = 0.;
   foreach_boundary(left, reduction(+:qwall_int)) {
     double dTdx = (T[] - 1.0)/Delta;
-    double ff = clamp(f[], 0., 1.);
-    double a_loc = ff*alphaL_nd + (1. - ff)*alphaG_nd;
+    double ff = clamp01(f[]);
+    double a_loc = alpha_blend_nd(ff);
     double qn = -a_loc*dTdx;
     qwall_int += qn*Delta;
   }
