@@ -1,0 +1,33 @@
+# Compiled files
+*.o
+*.s
+*.exe
+droplet_impact
+_*.c
+
+# Output data files
+*.dat
+*.ppm
+*.gif
+*.mp4
+*.png
+
+# Temporary files
+*.log
+log
+*~
+*.swp
+*.tmp
+
+# Basilisk generated files
+*.pyc
+__pycache__/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-*
