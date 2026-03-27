@@ -411,7 +411,7 @@ event droplets (t += 0.01) {
 #endif
 
   for (int j = 0; j < n; j++)
-    if (v[j] > 0.)
+    if (v[j] > 1e-30)
       fprintf (fp_droplets, "%d %g %d %g %g %g\n", i, t,
                j, v[j], b[j].x/v[j], b[j].y/v[j]);
   fflush (fp_droplets);
